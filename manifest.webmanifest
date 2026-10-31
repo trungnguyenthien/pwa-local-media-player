@@ -1,0 +1,42 @@
+{
+  "id": "/pwa-local-media-player/",
+  "name": "PWA Video Player",
+  "short_name": "Video Player",
+  "description": "Trình phát video từ tệp cục bộ trên thiết bị, chạy mượt mà và hoạt động 100% offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#12131a",
+  "background_color": "#12131a",
+  "categories": ["multimedia", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "name": "Tệp Video",
+      "accept": {
+        "video/*": [".mp4", ".m4v", ".mov", ".webm", ".ogv", ".mkv"]
+      }
+    }
+  ]
+}
