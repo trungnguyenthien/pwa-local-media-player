@@ -1,6 +1,7 @@
 /**
  * PWA Video Player (Local File)
  * Complies with Spec & PWA Standards
+ * Version 2: Added Watch History & Replay Feature
  */
 
 (() => {
@@ -9,6 +10,7 @@
   // --- DOM Elements ---
   const emptyScreen = document.getElementById('emptyScreen');
   const playerScreen = document.getElementById('playerScreen');
+  const historyScreen = document.getElementById('historyScreen');
   const fileInput = document.getElementById('fileInput');
   const dropZone = document.getElementById('dropZone');
   const btnPickVideo = document.getElementById('btnPickVideo');
@@ -18,6 +20,21 @@
   const video = document.getElementById('videoPlayer');
   const videoTitle = document.getElementById('videoTitle');
   const btnOpenAnother = document.getElementById('btnOpenAnother');
+
+  // History UI elements
+  const btnViewHistory = document.getElementById('btnViewHistory');
+  const btnHistoryFromPlayer = document.getElementById('btnHistoryFromPlayer');
+  const btnBackFromHistory = document.getElementById('btnBackFromHistory');
+  const btnClearHistory = document.getElementById('btnClearHistory');
+  const historyCountBadge = document.getElementById('historyCountBadge');
+  const historySubtitle = document.getElementById('historySubtitle');
+  const historyEmptyState = document.getElementById('historyEmptyState');
+  const historyListContainer = document.getElementById('historyListContainer');
+  const btnHistoryPickVideo = document.getElementById('btnHistoryPickVideo');
+  const clearHistoryModal = document.getElementById('clearHistoryModal');
+  const btnCloseClearModal = document.getElementById('btnCloseClearModal');
+  const btnCancelClear = document.getElementById('btnCancelClear');
+  const btnConfirmClear = document.getElementById('btnConfirmClear');
 
   // Center overlay elements
   const btnCenterPlay = document.getElementById('btnCenterPlay');
@@ -87,6 +104,7 @@
 
   // --- State Variables ---
   let currentFile = null;
+  let currentFileHandle = null;
   let currentObjectUrl = null;
   let controlsTimeout = null;
   let isDraggingSeek = false;
@@ -97,14 +115,210 @@
   let tapTimeout = null;
   let snackbarTimeout = null;
   let pendingResumeTime = 0;
+  let previousScreen = 'empty'; // 'empty' | 'player'
+  let pendingHistoryReplay = null; // target when picking re-selected file
+
+  // --------------------------------------------------------------------------
+  // IndexedDB Storage for Watch History
+  // --------------------------------------------------------------------------
+
+  const DB_NAME = 'pwa_video_player_db';
+  const DB_VERSION = 1;
+  const STORE_HISTORY = 'watch_history';
+
+  function openHistoryDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_HISTORY)) {
+          const store = db.createObjectStore(STORE_HISTORY, { keyPath: 'id' });
+          store.createIndex('lastPlayedAt', 'lastPlayedAt', { unique: false });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function getHistoryKey(file) {
+    return `${encodeURIComponent(file.name)}_${file.size}_${file.lastModified || 0}`;
+  }
+
+  async function saveOrUpdateHistory(file, handle = null) {
+    try {
+      const db = await openHistoryDB();
+      const id = getHistoryKey(file);
+
+      // Check existing item
+      const tx = db.transaction(STORE_HISTORY, 'readonly');
+      const store = tx.objectStore(STORE_HISTORY);
+      const existing = await new Promise((resolve) => {
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+
+      // Prepare data
+      const item = existing || {
+        id: id,
+        name: file.name,
+        size: file.size,
+        lastModified: file.lastModified || Date.now(),
+        duration: 0,
+        lastPosition: 0,
+        thumbnail: null,
+        hasBlob: false,
+        hasHandle: false
+      };
+
+      item.lastPlayedAt = Date.now();
+
+      // Store handle if available
+      if (handle) {
+        item.handle = handle;
+        item.hasHandle = true;
+      }
+
+      // Try caching blob if under 300MB
+      const MAX_BLOB_SIZE = 300 * 1024 * 1024; // 300MB
+      if (!item.hasHandle && file instanceof Blob && file.size <= MAX_BLOB_SIZE) {
+        item.blob = file;
+        item.hasBlob = true;
+      }
+
+      const writeTx = db.transaction(STORE_HISTORY, 'readwrite');
+      const writeStore = writeTx.objectStore(STORE_HISTORY);
+      writeStore.put(item);
+
+      await new Promise((resolve, reject) => {
+        writeTx.oncomplete = resolve;
+        writeTx.onerror = () => {
+          // If QuotaExceededError, try writing without blob
+          if (item.blob) {
+            delete item.blob;
+            item.hasBlob = false;
+            const retryTx = db.transaction(STORE_HISTORY, 'readwrite');
+            retryTx.objectStore(STORE_HISTORY).put(item);
+            retryTx.oncomplete = resolve;
+            retryTx.onerror = reject;
+          } else {
+            reject(writeTx.error);
+          }
+        };
+      });
+
+      updateHistoryBadge();
+    } catch (err) {
+      console.warn('Could not save watch history:', err);
+    }
+  }
+
+  async function updateHistoryDurationAndThumbnail(file, duration, thumbnail) {
+    try {
+      const db = await openHistoryDB();
+      const id = getHistoryKey(file);
+      const tx = db.transaction(STORE_HISTORY, 'readwrite');
+      const store = tx.objectStore(STORE_HISTORY);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const item = req.result;
+        if (item) {
+          if (duration > 0) item.duration = duration;
+          if (thumbnail) item.thumbnail = thumbnail;
+          store.put(item);
+        }
+      };
+    } catch (e) {}
+  }
+
+  async function updateHistoryPosition(file, position) {
+    try {
+      const db = await openHistoryDB();
+      const id = getHistoryKey(file);
+      const tx = db.transaction(STORE_HISTORY, 'readwrite');
+      const store = tx.objectStore(STORE_HISTORY);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const item = req.result;
+        if (item) {
+          item.lastPosition = position;
+          item.lastPlayedAt = Date.now();
+          store.put(item);
+        }
+      };
+    } catch (e) {}
+  }
+
+  async function getAllHistory() {
+    try {
+      const db = await openHistoryDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_HISTORY, 'readonly');
+        const store = tx.objectStore(STORE_HISTORY);
+        const index = store.index('lastPlayedAt');
+        const req = index.openCursor(null, 'prev');
+        const results = [];
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            results.push(cursor.value);
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async function deleteHistoryItem(id) {
+    try {
+      const db = await openHistoryDB();
+      const tx = db.transaction(STORE_HISTORY, 'readwrite');
+      tx.objectStore(STORE_HISTORY).delete(id);
+      await new Promise(r => tx.oncomplete = r);
+      updateHistoryBadge();
+      renderHistoryList();
+      showSnackbar('Đã xoá video khỏi lịch sử.');
+    } catch (e) {}
+  }
+
+  async function clearAllHistory() {
+    try {
+      const db = await openHistoryDB();
+      const tx = db.transaction(STORE_HISTORY, 'readwrite');
+      tx.objectStore(STORE_HISTORY).clear();
+      await new Promise(r => tx.oncomplete = r);
+      updateHistoryBadge();
+      renderHistoryList();
+      showSnackbar('Đã xoá toàn bộ lịch sử.');
+    } catch (e) {}
+  }
+
+  async function updateHistoryBadge() {
+    const list = await getAllHistory();
+    const count = list.length;
+    if (historyCountBadge) {
+      if (count > 0) {
+        historyCountBadge.textContent = count > 99 ? '99+' : count;
+        historyCountBadge.classList.remove('hidden');
+      } else {
+        historyCountBadge.classList.add('hidden');
+      }
+    }
+    if (historySubtitle) {
+      historySubtitle.textContent = `${count} video`;
+    }
+  }
 
   // --------------------------------------------------------------------------
   // Utility Functions
   // --------------------------------------------------------------------------
 
-  /**
-   * Format seconds into mm:ss or h:mm:ss
-   */
   function formatTime(seconds) {
     if (isNaN(seconds) || seconds < 0) return '00:00';
     const s = Math.floor(seconds % 60);
@@ -118,9 +332,35 @@
     return `${pad(m)}:${pad(s)}`;
   }
 
-  /**
-   * Show floating snackbar message
-   */
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function formatDate(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    const pad = (n) => n.toString().padStart(2, '0');
+    const timeStr = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+    if (diffHours < 24 && now.getDate() === date.getDate()) {
+      return `Hôm nay ${timeStr}`;
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.getDate() === date.getDate()) {
+      return `Hôm qua ${timeStr}`;
+    }
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${timeStr}`;
+  }
+
   function showSnackbar(message, duration = 3000) {
     if (!snackbar) return;
     snackbar.textContent = message;
@@ -131,13 +371,26 @@
     }, duration);
   }
 
+  function captureVideoThumbnail() {
+    try {
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
+      const canvas = document.createElement('canvas');
+      const targetWidth = 320;
+      const targetHeight = Math.round(targetWidth * (video.videoHeight / video.videoWidth || 9 / 16));
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+      return canvas.toDataURL('image/jpeg', 0.7);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Video Source & Memory Lifecycle Management (Spec Section 8)
   // --------------------------------------------------------------------------
 
-  /**
-   * Revoke existing object URL and reset media element to avoid memory leaks
-   */
   function cleanupCurrentVideo() {
     if (video) {
       video.pause();
@@ -153,15 +406,15 @@
   }
 
   /**
-   * Load a selected video File into player
+   * Load a selected video File or Blob into player
    */
-  function loadVideoFile(file) {
+  function loadVideoFile(file, resumePosition = 0, customName = null, handle = null) {
     if (!file) return;
 
-    // Validate mime or extension
+    const fileName = customName || file.name || 'Video';
     const validExtensions = ['.mp4', '.m4v', '.mov', '.webm', '.ogv', '.mkv'];
-    const lowerName = file.name.toLowerCase();
-    const isVideoMime = file.type.startsWith('video/');
+    const lowerName = fileName.toLowerCase();
+    const isVideoMime = file.type && file.type.startsWith('video/');
     const hasValidExt = validExtensions.some(ext => lowerName.endsWith(ext));
 
     if (!isVideoMime && !hasValidExt) {
@@ -173,14 +426,15 @@
     cleanupCurrentVideo();
 
     currentFile = file;
+    currentFileHandle = handle;
 
     // Step 2: Create new streamable Object URL
     currentObjectUrl = URL.createObjectURL(file);
     video.src = currentObjectUrl;
 
     // Step 3: Update UI Titles & Reset states
-    videoTitle.textContent = file.name;
-    videoTitle.setAttribute('title', file.name);
+    videoTitle.textContent = fileName;
+    videoTitle.setAttribute('title', fileName);
     btnCenterPlay.classList.add('hidden');
     btnCenterReplay.classList.add('hidden');
     bufferSpinner.classList.remove('hidden');
@@ -195,11 +449,23 @@
     // Switch screen to player
     showPlayerScreen();
 
-    // Check saved position in localStorage
-    checkSavedPlaybackPosition(file);
+    // Save to Watch History
+    saveOrUpdateHistory(file, handle);
 
     // Setup Media Session API
-    setupMediaSession(file.name);
+    setupMediaSession(fileName);
+
+    // If resume position was passed directly (from history replay)
+    if (resumePosition > 0) {
+      video.addEventListener('loadedmetadata', function onLoadedMeta() {
+        video.removeEventListener('loadedmetadata', onLoadedMeta);
+        seekTo(resumePosition);
+        showSnackbar(`Đang tiếp tục phát từ ${formatTime(resumePosition)}`);
+      });
+    } else {
+      // Check saved position in localStorage
+      checkSavedPlaybackPosition(file);
+    }
 
     // Play video
     video.play().then(() => {
@@ -216,25 +482,211 @@
     });
   }
 
-  /**
-   * Switch to Player screen
-   */
+  // --------------------------------------------------------------------------
+  // Screen Switching & Navigation
+  // --------------------------------------------------------------------------
+
   function showPlayerScreen() {
     emptyScreen.classList.add('hidden');
+    historyScreen.classList.add('hidden');
     playerScreen.classList.remove('hidden');
+    previousScreen = 'player';
     showControls();
   }
 
-  /**
-   * Switch to Empty screen
-   */
   function showEmptyScreen() {
     cleanupCurrentVideo();
     currentFile = null;
+    currentFileHandle = null;
     hideResumePrompt();
     playerScreen.classList.add('hidden');
+    historyScreen.classList.add('hidden');
     emptyScreen.classList.remove('hidden');
+    previousScreen = 'empty';
+    updateHistoryBadge();
   }
+
+  function showHistoryScreen() {
+    if (!playerScreen.classList.contains('hidden')) {
+      previousScreen = 'player';
+    } else {
+      previousScreen = 'empty';
+    }
+    emptyScreen.classList.add('hidden');
+    playerScreen.classList.add('hidden');
+    historyScreen.classList.remove('hidden');
+    renderHistoryList();
+  }
+
+  btnViewHistory.addEventListener('click', showHistoryScreen);
+  btnHistoryFromPlayer.addEventListener('click', showHistoryScreen);
+
+  btnBackFromHistory.addEventListener('click', () => {
+    if (previousScreen === 'player' && currentObjectUrl) {
+      showPlayerScreen();
+    } else {
+      showEmptyScreen();
+    }
+  });
+
+  btnHistoryPickVideo.addEventListener('click', () => {
+    showEmptyScreen();
+    fileInput.click();
+  });
+
+  // --------------------------------------------------------------------------
+  // History List Rendering & Replay Action
+  // --------------------------------------------------------------------------
+
+  async function renderHistoryList() {
+    const list = await getAllHistory();
+    updateHistoryBadge();
+
+    if (list.length === 0) {
+      historyEmptyState.classList.remove('hidden');
+      historyListContainer.innerHTML = '';
+      btnClearHistory.classList.add('hidden');
+      return;
+    }
+
+    historyEmptyState.classList.add('hidden');
+    btnClearHistory.classList.remove('hidden');
+    historyListContainer.innerHTML = '';
+
+    list.forEach((item) => {
+      const card = document.createElement('article');
+      card.className = 'history-card';
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `Xem lại video ${item.name}`);
+
+      const progressPercent = item.duration > 0 ? Math.min(100, (item.lastPosition / item.duration) * 100) : 0;
+      const isCompleted = item.duration > 0 && item.lastPosition >= item.duration - 5;
+
+      let progressText = 'Chưa phát';
+      if (isCompleted) {
+        progressText = 'Đã xem hết';
+      } else if (item.lastPosition > 0 && item.duration > 0) {
+        progressText = `Đã xem ${formatTime(item.lastPosition)} / ${formatTime(item.duration)} (${Math.round(progressPercent)}%)`;
+      } else if (item.duration > 0) {
+        progressText = `Thời lượng ${formatTime(item.duration)}`;
+      }
+
+      card.innerHTML = `
+        <div class="card-thumbnail-wrap">
+          ${item.thumbnail
+            ? `<img class="card-thumbnail" src="${item.thumbnail}" alt="Ảnh thu nhỏ video" loading="lazy">`
+            : `<div class="card-placeholder">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="2" y="2" width="20" height="20" rx="4"/>
+                  <polygon points="10 8 16 12 10 16" fill="currentColor"/>
+                </svg>
+                <span style="font-size: 0.75rem;">Video</span>
+              </div>`
+          }
+          ${item.duration > 0 ? `<span class="card-duration-badge">${formatTime(item.duration)}</span>` : ''}
+          ${progressPercent > 0 ? `<div class="card-progress-bar" style="width: ${progressPercent}%;"></div>` : ''}
+          <div class="card-play-overlay">
+            <div class="play-circle">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="7,5 19,12 7,19"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <h2 class="card-title" title="${item.name}">${item.name}</h2>
+          <div class="card-meta">
+            <span>${formatBytes(item.size)}</span>
+            <span>•</span>
+            <span>${formatDate(item.lastPlayedAt)}</span>
+          </div>
+          <div class="card-progress-text">${progressText}</div>
+        </div>
+
+        <div class="card-footer">
+          <button class="card-btn-replay" type="button" aria-label="Xem lại">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6,4 20,12 6,20"/>
+            </svg>
+            <span>Xem lại</span>
+          </button>
+          <button class="card-btn-delete" type="button" aria-label="Xoá khỏi lịch sử">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      `;
+
+      // Handle card replay click
+      const handleReplay = async (e) => {
+        e.stopPropagation();
+        await replayHistoryItem(item);
+      };
+
+      card.addEventListener('click', handleReplay);
+      card.querySelector('.card-btn-replay').addEventListener('click', handleReplay);
+
+      // Handle card delete click
+      const btnDelete = card.querySelector('.card-btn-delete');
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteHistoryItem(item.id);
+      });
+
+      historyListContainer.appendChild(card);
+    });
+  }
+
+  /**
+   * Replay a video previously recorded in history
+   */
+  async function replayHistoryItem(item) {
+    // Case 1: Stored FileSystemFileHandle available (Desktop Chromium / Origin File System)
+    if (item.hasHandle && item.handle) {
+      try {
+        let perm = await item.handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') {
+          perm = await item.handle.requestPermission({ mode: 'read' });
+        }
+        if (perm === 'granted') {
+          const file = await item.handle.getFile();
+          loadVideoFile(file, item.lastPosition, item.name, item.handle);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not read via stored handle:', err);
+      }
+    }
+
+    // Case 2: Stored Blob / File in IndexedDB
+    if (item.hasBlob && item.blob) {
+      loadVideoFile(item.blob, item.lastPosition, item.name);
+      return;
+    }
+
+    // Case 3: Need user to pick the file from machine
+    pendingHistoryReplay = item;
+    showSnackbar(`Chọn lại tệp "${item.name}" để tiếp tục xem từ ${formatTime(item.lastPosition)}`, 4000);
+    fileInput.click();
+  }
+
+  // Clear History Modal Handlers
+  btnClearHistory.addEventListener('click', () => {
+    clearHistoryModal.classList.add('open');
+  });
+
+  [btnCloseClearModal, btnCancelClear].forEach(btn => {
+    if (btn) btn.addEventListener('click', () => clearHistoryModal.classList.remove('open'));
+  });
+
+  btnConfirmClear.addEventListener('click', async () => {
+    clearHistoryModal.classList.remove('open');
+    await clearAllHistory();
+  });
 
   // --------------------------------------------------------------------------
   // Controls Auto-Hide Behavior (Spec Section 6.2)
@@ -246,7 +698,6 @@
   }
 
   function hideControls() {
-    // Only auto-hide when video is playing and user is not seeking or browsing speed
     if (!video.paused && !video.ended && !isDraggingSeek && speedDropdown.classList.contains('hidden')) {
       videoContainer.classList.add('controls-hidden');
     }
@@ -307,6 +758,9 @@
     releaseWakeLock();
     showControls();
     updateMediaSessionPlaybackState('paused');
+    if (currentFile) {
+      updateHistoryPosition(currentFile, video.currentTime);
+    }
   });
 
   video.addEventListener('ended', () => {
@@ -315,6 +769,9 @@
     showControls();
     btnCenterReplay.classList.remove('hidden');
     updateMediaSessionPlaybackState('none');
+    if (currentFile && !isNaN(video.duration)) {
+      updateHistoryPosition(currentFile, video.duration);
+    }
   });
 
   video.addEventListener('waiting', () => {
@@ -329,10 +786,25 @@
     bufferSpinner.classList.add('hidden');
   });
 
+  video.addEventListener('loadeddata', () => {
+    // Capture snapshot for history thumbnail
+    if (currentFile) {
+      setTimeout(() => {
+        const thumb = captureVideoThumbnail();
+        if (thumb) {
+          updateHistoryDurationAndThumbnail(currentFile, video.duration, thumb);
+        }
+      }, 300);
+    }
+  });
+
   video.addEventListener('durationchange', () => {
     if (!isNaN(video.duration)) {
       durationTimeEl.textContent = formatTime(video.duration);
       seekBar.max = video.duration;
+      if (currentFile) {
+        updateHistoryDurationAndThumbnail(currentFile, video.duration, null);
+      }
     }
   });
 
@@ -344,9 +816,12 @@
       progressBar.style.width = `${progressPercent}%`;
       currentTimeEl.textContent = formatTime(cur);
 
-      // Save position to localStorage periodically (every ~3s)
-      if (currentFile && cur > 5 && cur < video.duration - 5) {
+      // Save position to localStorage and IndexedDB periodically (every ~3s)
+      if (currentFile && cur > 3 && cur < video.duration - 3) {
         savePlaybackPosition(currentFile, cur);
+        if (Math.floor(cur) % 3 === 0) {
+          updateHistoryPosition(currentFile, cur);
+        }
       }
     }
   });
@@ -357,9 +832,7 @@
         const bufferedEnd = video.buffered.end(video.buffered.length - 1);
         const bufferedPercent = (bufferedEnd / video.duration) * 100;
         bufferedBar.style.width = `${Math.min(100, bufferedPercent)}%`;
-      } catch (err) {
-        // Range exception ignore
-      }
+      } catch (err) {}
     }
   });
 
@@ -375,7 +848,7 @@
       } else if (err.code === MediaError.MEDIA_ERR_NETWORK) {
         msg = 'Không đọc được file do lỗi đọc tệp.';
       } else if (err.code === MediaError.MEDIA_ERR_ABORTED) {
-        return; // Aborted intentionally on file switch
+        return;
       }
     }
 
@@ -393,6 +866,7 @@
       seekBar.value = clamped;
       progressBar.style.width = `${(clamped / video.duration) * 100}%`;
       currentTimeEl.textContent = formatTime(clamped);
+      if (currentFile) updateHistoryPosition(currentFile, clamped);
     }
   }
 
@@ -413,9 +887,9 @@
     const val = parseFloat(seekBar.value);
     video.currentTime = val;
     resetControlsTimer();
+    if (currentFile) updateHistoryPosition(currentFile, val);
   });
 
-  // Mouse hover preview tooltip over seek bar
   seekContainer.addEventListener('mousemove', (e) => {
     if (isNaN(video.duration) || video.duration <= 0) return;
     const rect = seekContainer.getBoundingClientRect();
@@ -444,7 +918,6 @@
   function triggerRipple(rippleEl) {
     rippleEl.classList.remove('hidden');
     rippleEl.style.animation = 'none';
-    // Force DOM reflow to restart CSS animation
     void rippleEl.offsetWidth;
     rippleEl.style.animation = '';
     setTimeout(() => {
@@ -455,18 +928,14 @@
   btnRewind10.addEventListener('click', () => seekRelative(-10));
   btnForward10.addEventListener('click', () => seekRelative(10));
 
-  // Double tap gesture detection on left/right halves
   function handleGestureTap(isRightHalf) {
     const now = Date.now();
     if (now - lastTapTime < 280) {
-      // Double tap detected
       clearTimeout(tapTimeout);
       tapTimeout = null;
       seekRelative(isRightHalf ? 10 : -10);
     } else {
-      // Potential single tap
       tapTimeout = setTimeout(() => {
-        // Single tap: toggle controls or play/pause
         if (videoContainer.classList.contains('controls-hidden')) {
           showControls();
         } else {
@@ -487,7 +956,6 @@
     handleGestureTap(true);
   });
 
-  // Center play/replay button clicks
   btnCenterPlay.addEventListener('click', togglePlay);
   btnCenterReplay.addEventListener('click', () => {
     video.currentTime = 0;
@@ -532,7 +1000,6 @@
     localStorage.setItem('pwa_video_volume', val.toString());
   });
 
-  // Initialize saved volume preferences
   const savedVol = localStorage.getItem('pwa_video_volume');
   if (savedVol !== null) {
     const v = parseFloat(savedVol);
@@ -568,7 +1035,6 @@
     });
   });
 
-  // Close speed dropdown when clicking outside
   document.addEventListener('click', (e) => {
     if (!speedDropdown.contains(e.target) && e.target !== btnSpeed) {
       speedDropdown.classList.add('hidden');
@@ -602,7 +1068,6 @@
       }
     });
   } else {
-    // Hide PiP button if browser does not support it
     btnPip.classList.add('hidden');
   }
 
@@ -626,7 +1091,6 @@
         } else if (videoContainer.webkitRequestFullscreen) {
           await videoContainer.webkitRequestFullscreen();
         } else if (video.webkitEnterFullscreen) {
-          // iOS Safari fallback
           video.webkitEnterFullscreen();
         }
       } else {
@@ -705,12 +1169,8 @@
         ]
       });
 
-      navigator.mediaSession.setActionHandler('play', () => {
-        video.play();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        video.pause();
-      });
+      navigator.mediaSession.setActionHandler('play', () => video.play());
+      navigator.mediaSession.setActionHandler('pause', () => video.pause());
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         seekRelative(-(details.seekOffset || 10));
       });
@@ -718,13 +1178,9 @@
         seekRelative(details.seekOffset || 10);
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined) {
-          seekTo(details.seekTime);
-        }
+        if (details.seekTime !== undefined) seekTo(details.seekTime);
       });
-      navigator.mediaSession.setActionHandler('stop', () => {
-        showEmptyScreen();
-      });
+      navigator.mediaSession.setActionHandler('stop', () => showEmptyScreen());
     }
   }
 
@@ -746,7 +1202,7 @@
   // --------------------------------------------------------------------------
 
   function getStorageKey(file) {
-    return `pwa_video_pos_${encodeURIComponent(file.name)}_${file.size}_${file.lastModified}`;
+    return `pwa_video_pos_${encodeURIComponent(file.name)}_${file.size}_${file.lastModified || 0}`;
   }
 
   function savePlaybackPosition(file, time) {
@@ -796,10 +1252,9 @@
   // --------------------------------------------------------------------------
 
   document.addEventListener('keydown', (e) => {
-    // Only handle shortcuts when on player screen and not inside an input/dialog
     if (playerScreen.classList.contains('hidden')) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (errorModal.classList.contains('open') || iosInstallModal.classList.contains('open')) return;
+    if (errorModal.classList.contains('open') || iosInstallModal.classList.contains('open') || clearHistoryModal.classList.contains('open')) return;
 
     switch (e.code) {
       case 'Space':
@@ -864,44 +1319,77 @@
     }
   });
 
-  // Track mouse movement over video container to reveal controls
-  videoContainer.addEventListener('mousemove', () => {
-    showControls();
-  });
+  videoContainer.addEventListener('mousemove', () => showControls());
 
   // --------------------------------------------------------------------------
   // File Picker & Drag-and-Drop
   // --------------------------------------------------------------------------
 
-  btnPickVideo.addEventListener('click', () => {
-    fileInput.click();
+  async function pickFileWithModernAPI() {
+    // If showOpenFilePicker is supported (Chromium Desktop/Android), we get a handle that can be re-opened later!
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [
+            {
+              description: 'Tệp Video',
+              accept: {
+                'video/*': ['.mp4', '.m4v', '.mov', '.webm', '.ogv', '.mkv']
+              }
+            }
+          ],
+          multiple: false
+        });
+        if (handle) {
+          const file = await handle.getFile();
+          const resumePos = pendingHistoryReplay ? pendingHistoryReplay.lastPosition : 0;
+          pendingHistoryReplay = null;
+          loadVideoFile(file, resumePos, file.name, handle);
+          return true;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return true; // User cancelled
+      }
+    }
+    return false;
+  }
+
+  btnPickVideo.addEventListener('click', async () => {
+    const handled = await pickFileWithModernAPI();
+    if (!handled) fileInput.click();
   });
 
-  dropZone.addEventListener('click', () => {
-    fileInput.click();
+  dropZone.addEventListener('click', async () => {
+    const handled = await pickFileWithModernAPI();
+    if (!handled) fileInput.click();
   });
 
-  dropZone.addEventListener('keydown', (e) => {
+  dropZone.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      fileInput.click();
+      const handled = await pickFileWithModernAPI();
+      if (!handled) fileInput.click();
     }
   });
 
-  btnOpenAnother.addEventListener('click', () => {
-    fileInput.click();
+  btnOpenAnother.addEventListener('click', async () => {
+    const handled = await pickFileWithModernAPI();
+    if (!handled) fileInput.click();
   });
 
-  btnErrorPickFile.addEventListener('click', () => {
+  btnErrorPickFile.addEventListener('click', async () => {
     errorModal.classList.remove('open');
-    fileInput.click();
+    const handled = await pickFileWithModernAPI();
+    if (!handled) fileInput.click();
   });
 
   fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      loadVideoFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const resumePos = pendingHistoryReplay ? pendingHistoryReplay.lastPosition : 0;
+      pendingHistoryReplay = null;
+      loadVideoFile(file, resumePos);
     }
-    // Clear value to allow picking same file again if desired
     fileInput.value = '';
   });
 
@@ -916,7 +1404,6 @@
   window.addEventListener('dragleave', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only hide if dragging out of the window
     if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
       dragDropOverlay.classList.add('hidden');
       dropZone.classList.remove('dragover');
@@ -931,7 +1418,6 @@
 
     const dt = e.dataTransfer;
     if (dt && dt.files && dt.files.length > 0) {
-      // Pick first file only, ignore rest per Spec Section 8
       loadVideoFile(dt.files[0]);
     }
   });
@@ -971,12 +1457,10 @@
       if (btnInstall) btnInstall.classList.add('hidden');
       if (btnInstallPlayer) btnInstallPlayer.classList.add('hidden');
     } else if (isIOS) {
-      // iOS Safari does not fire beforeinstallprompt; show button to open iOS guide modal
       if (btnInstall) btnInstall.classList.remove('hidden');
       if (btnInstallPlayer) btnInstallPlayer.classList.remove('hidden');
     }
 
-    // 1. Listen for beforeinstallprompt on Chromium (Android / Desktop)
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
@@ -986,7 +1470,6 @@
       }
     });
 
-    // 2. Listen for app installed
     window.addEventListener('appinstalled', () => {
       deferredInstallPrompt = null;
       if (btnInstall) btnInstall.classList.add('hidden');
@@ -994,7 +1477,6 @@
       showSnackbar('Cài đặt ứng dụng thành công!');
     });
 
-    // 3. Handle Install Click
     const handleInstallClick = async () => {
       if (deferredInstallPrompt) {
         deferredInstallPrompt.prompt();
@@ -1012,7 +1494,6 @@
     if (btnInstall) btnInstall.addEventListener('click', handleInstallClick);
     if (btnInstallPlayer) btnInstallPlayer.addEventListener('click', handleInstallClick);
 
-    // Close iOS Modal
     [btnCloseIosModal, btnGotItIos].forEach((btn) => {
       if (btn) {
         btn.addEventListener('click', () => iosInstallModal.classList.remove('open'));
@@ -1027,12 +1508,10 @@
   function initPWAServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    // Relative registration scope per PWA standards
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => {
         swRegistration = reg;
 
-        // Check if an updated worker is waiting
         if (reg.waiting) {
           notifyUpdateReady(reg.waiting);
         }
@@ -1052,7 +1531,6 @@
         console.warn('Service Worker registration failed:', err);
       });
 
-    // Force Update App Button Handler
     if (btnUpdateApp) {
       btnUpdateApp.addEventListener('click', async () => {
         if (!navigator.onLine) {
@@ -1072,13 +1550,11 @@
               swRegistration.waiting.postMessage({ action: 'skipWaiting' });
             }
 
-            // Clear old caches
             if ('caches' in window) {
               const keys = await caches.keys();
               await Promise.all(keys.map(k => caches.delete(k)));
             }
 
-            // Unregister and reload with cache busting query
             await swRegistration.unregister();
             showSnackbar('Đang tải bản cập nhật mới nhất...');
             setTimeout(() => {
@@ -1097,7 +1573,7 @@
     }
   }
 
-  function notifyUpdateReady(waitingWorker) {
+  function notifyUpdateReady() {
     if (btnUpdateApp) {
       btnUpdateApp.classList.add('btn-update-ready');
       updateLabel.textContent = 'Cập nhật mới!';
@@ -1114,8 +1590,9 @@
       window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
           try {
-            const file = await launchParams.files[0].getFile();
-            loadVideoFile(file);
+            const handle = launchParams.files[0];
+            const file = await handle.getFile();
+            loadVideoFile(file, 0, file.name, handle);
           } catch (err) {
             console.error('Launch queue file read error:', err);
           }
@@ -1133,6 +1610,7 @@
     initPWAServiceWorker();
     initFileHandlers();
     updateVolumeUI();
+    updateHistoryBadge();
   });
 
 })();
