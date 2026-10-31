@@ -928,40 +928,99 @@
   btnRewind10.addEventListener('click', () => seekRelative(-10));
   btnForward10.addEventListener('click', () => seekRelative(10));
 
-  function handleGestureTap(isRightHalf) {
-    const now = Date.now();
-    if (now - lastTapTime < 280) {
-      clearTimeout(tapTimeout);
-      tapTimeout = null;
-      seekRelative(isRightHalf ? 10 : -10);
+  // --------------------------------------------------------------------------
+  // Smart Screen Touch Gestures:
+  // - 1 touch = play/pause (khi replay thì nhảy lùi 1s trước khi play lại)
+  // - Double touch ở nửa bên trái = lùi lại 5s
+  // - Double touch ở nửa bên phải = tới 5s
+  // --------------------------------------------------------------------------
+
+  function handleSingleTouchPlayPause() {
+    if (video.paused || video.ended) {
+      // Khi replay thì nhảy lùi 1s trước khi play lại
+      if (video.ended) {
+        const targetTime = Math.max(0, (video.duration || 0) - 1.0);
+        seekTo(targetTime);
+      } else if (video.currentTime > 1.0) {
+        const targetTime = Math.max(0, video.currentTime - 1.0);
+        seekTo(targetTime);
+      } else {
+        seekTo(0);
+      }
+
+      video.play().then(() => {
+        updatePlayPauseIcons(true);
+        requestWakeLock();
+        resetControlsTimer();
+        showSnackbar('Đã lùi 1s & tiếp tục phát', 2000);
+      }).catch(() => {
+        btnCenterPlay.classList.remove('hidden');
+      });
+      showControls();
     } else {
-      tapTimeout = setTimeout(() => {
-        if (videoContainer.classList.contains('controls-hidden')) {
-          showControls();
-        } else {
-          togglePlay();
-        }
-      }, 290);
+      // Đang phát -> tạm dừng ngay
+      video.pause();
+      showControls();
     }
-    lastTapTime = now;
   }
 
-  gestureLeft.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    handleGestureTap(false);
-  });
+  function handleGestureTap(isRightHalf) {
+    const now = Date.now();
+    if (now - lastTapTime < 290) {
+      // Double touch: hủy hành động single touch
+      clearTimeout(tapTimeout);
+      tapTimeout = null;
+      lastTapTime = 0; // Đặt lại để tránh nhầm lần chạm thứ 3
 
-  gestureRight.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    handleGestureTap(true);
-  });
+      // Nửa bên trái: lùi lại 5s (-5s); Nửa bên phải: tới 5s (+5s)
+      seekRelative(isRightHalf ? 5 : -5);
+    } else {
+      lastTapTime = now;
+      clearTimeout(tapTimeout);
+      tapTimeout = setTimeout(() => {
+        tapTimeout = null;
+        // 1 touch = play/pause (khi replay thì nhảy lùi 1s trước khi play lại)
+        handleSingleTouchPlayPause();
+      }, 300);
+    }
+  }
 
-  btnCenterPlay.addEventListener('click', togglePlay);
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+
+  function handlePointerDown(e) {
+    touchStartX = e.clientX;
+    touchStartY = e.clientY;
+    touchStartTime = Date.now();
+  }
+
+  function handlePointerUp(e, isRightHalf) {
+    const distX = Math.abs(e.clientX - touchStartX);
+    const distY = Math.abs(e.clientY - touchStartY);
+    const elapsed = Date.now() - touchStartTime;
+
+    // Chỉ nhận tap nếu con trỏ không di chuyển nhiều (< 20px) và không giữ quá lâu (< 450ms)
+    if (distX < 20 && distY < 20 && elapsed < 450) {
+      e.preventDefault();
+      handleGestureTap(isRightHalf);
+    }
+  }
+
+  gestureLeft.addEventListener('pointerdown', handlePointerDown);
+  gestureLeft.addEventListener('pointerup', (e) => handlePointerUp(e, false));
+
+  gestureRight.addEventListener('pointerdown', handlePointerDown);
+  gestureRight.addEventListener('pointerup', (e) => handlePointerUp(e, true));
+
+  btnCenterPlay.addEventListener('click', handleSingleTouchPlayPause);
   btnCenterReplay.addEventListener('click', () => {
-    video.currentTime = 0;
+    // Khi replay thì nhảy lùi 1s trước khi play lại
+    const target = Math.max(0, (video.duration || 0) - 1.0);
+    seekTo(target);
     video.play();
   });
-  btnPlayPause.addEventListener('click', togglePlay);
+  btnPlayPause.addEventListener('click', handleSingleTouchPlayPause);
 
   // --------------------------------------------------------------------------
   // Volume & Mute Controls
