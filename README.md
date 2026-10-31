@@ -132,3 +132,4 @@ Dự án sử dụng **Pure Vanilla HTML/CSS/JavaScript**, không cần Node.js,
 ## 📄 Bản quyền & Đóng góp
 
 Dự án được phân phối theo giấy phép MIT License. Mọi ý kiến đóng góp hoặc báo lỗi (Issues / Pull Requests) đều được chào đón!
+
