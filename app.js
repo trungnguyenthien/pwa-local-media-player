@@ -1013,29 +1013,35 @@
   let touchStartY = 0;
   let touchStartTime = 0;
 
-  function handlePointerDown(e) {
+  function isInteractiveControl(target) {
+    if (!target) return false;
+    // Bỏ qua nếu chạm vào bất kỳ button, thanh trượt, menu hoặc điều khiển media nào
+    return !!target.closest(
+      'button, input, select, textarea, a, [role="button"], [role="menuitem"], .dialog-panel, .speed-dropdown, .btn-control, .seek-container, .volume-group'
+    );
+  }
+
+  // Lắng nghe chạm trên toàn màn hình player (cả video, viền đen letterbox, khoảng trống)
+  videoContainer.addEventListener("pointerdown", (e) => {
+    if (isInteractiveControl(e.target)) return;
     touchStartX = e.clientX;
     touchStartY = e.clientY;
     touchStartTime = Date.now();
-  }
+  });
 
-  function handlePointerUp(e, isRightHalf) {
+  videoContainer.addEventListener("pointerup", (e) => {
+    if (isInteractiveControl(e.target)) return;
+
     const distX = Math.abs(e.clientX - touchStartX);
     const distY = Math.abs(e.clientY - touchStartY);
     const elapsed = Date.now() - touchStartTime;
 
-    // Chỉ nhận tap nếu con trỏ không di chuyển nhiều (< 20px) và không giữ quá lâu (< 450ms)
-    if (distX < 20 && distY < 20 && elapsed < 450) {
-      e.preventDefault();
+    // Nhận tap nếu không vuốt trượt dài (< 25px) và không giữ lâu (< 450ms)
+    if (distX < 25 && distY < 25 && elapsed < 450) {
+      const isRightHalf = e.clientX >= window.innerWidth / 2;
       handleGestureTap(isRightHalf);
     }
-  }
-
-  gestureLeft.addEventListener("pointerdown", handlePointerDown);
-  gestureLeft.addEventListener("pointerup", (e) => handlePointerUp(e, false));
-
-  gestureRight.addEventListener("pointerdown", handlePointerDown);
-  gestureRight.addEventListener("pointerup", (e) => handlePointerUp(e, true));
+  });
 
   btnCenterPlay.addEventListener("click", togglePlay);
   btnCenterReplay.addEventListener("click", () => {
