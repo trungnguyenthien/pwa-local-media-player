@@ -78,6 +78,8 @@
   const speedOptions = document.querySelectorAll(".speed-opt");
   const btnLoop = document.getElementById("btnLoop");
   const btnPip = document.getElementById("btnPip");
+  const btnSwapBars = document.getElementById("btnSwapBars");
+  const btnFitMode = document.getElementById("btnFitMode");
   const btnRotate = document.getElementById("btnRotate");
   const btnFullscreen = document.getElementById("btnFullscreen");
   const iconEnterFs = document.getElementById("iconEnterFs");
@@ -511,6 +513,7 @@
     playerScreen.classList.remove("hidden");
     previousScreen = "player";
     lockLandscapeOrientation();
+    applyBarsLayout();
     showControls();
   }
 
@@ -1201,6 +1204,17 @@
   // Screen Orientation & Auto-Rotation (Ngang/Dọc)
   // --------------------------------------------------------------------------
 
+  let areBarsSwapped = localStorage.getItem("pwa_bars_swapped") === "1";
+  let isFitNoOverlap = localStorage.getItem("pwa_fit_no_overlap") === "1";
+
+  function applyBarsLayout() {
+    videoContainer.classList.toggle("bars-swapped", areBarsSwapped);
+    if (btnSwapBars) btnSwapBars.classList.toggle("swap-active", areBarsSwapped);
+
+    videoContainer.classList.toggle("fit-no-overlap", isFitNoOverlap);
+    if (btnFitMode) btnFitMode.classList.toggle("fit-active", isFitNoOverlap);
+  }
+
   let currentVideoIsLandscape = true;
   let isForcedRotated = false;
 
@@ -1254,6 +1268,36 @@
           showSnackbar("Đã trở về góc xoay mặc định");
         }
       }
+    });
+  }
+
+  // Swap Bars: Media Controls <--> Header
+  if (btnSwapBars) {
+    btnSwapBars.addEventListener("click", () => {
+      areBarsSwapped = !areBarsSwapped;
+      localStorage.setItem("pwa_bars_swapped", areBarsSwapped ? "1" : "0");
+      applyBarsLayout();
+      showSnackbar(
+        areBarsSwapped
+          ? "Đã chuyển thanh điều khiển lên trên"
+          : "Đã chuyển thanh điều khiển xuống dưới"
+      );
+      resetControlsTimer();
+    });
+  }
+
+  // Fit No-Overlap Mode: Không che bất kỳ phần nào của video
+  if (btnFitMode) {
+    btnFitMode.addEventListener("click", () => {
+      isFitNoOverlap = !isFitNoOverlap;
+      localStorage.setItem("pwa_fit_no_overlap", isFitNoOverlap ? "1" : "0");
+      applyBarsLayout();
+      showSnackbar(
+        isFitNoOverlap
+          ? "Chế độ không che video: ĐÃ BẬT"
+          : "Chế độ không che video: ĐÃ TẮT"
+      );
+      resetControlsTimer();
     });
   }
 
@@ -1816,5 +1860,6 @@
     initFileHandlers();
     updateVolumeUI();
     updateHistoryBadge();
+    applyBarsLayout();
   });
 })();
