@@ -1416,3 +1416,20 @@ html, body {
     z-index: 9999 !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Always Landscape Orientation Mode for Player Screen
+   -------------------------------------------------------------------------- */
+@media screen and (orientation: portrait) {
+  .player-screen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vh !important;
+    height: 100vw !important;
+    transform: rotate(90deg) translateY(-100vw) !important;
+    transform-origin: top left !important;
+    z-index: 50 !important;
+    overflow: hidden !important;
+  }
+}

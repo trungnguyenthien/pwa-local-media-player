@@ -47,6 +47,8 @@
 
   // Bottom controls
   const btnPlayPause = document.getElementById("btnPlayPause");
+  const btnStop = document.getElementById("btnStop");
+  const btnReplayFromStart = document.getElementById("btnReplayFromStart");
   const iconPlay = document.getElementById("iconPlay");
   const iconPause = document.getElementById("iconPause");
   const btnRewind10 = document.getElementById("btnRewind10");
@@ -508,6 +510,7 @@
     historyScreen.classList.add("hidden");
     playerScreen.classList.remove("hidden");
     previousScreen = "player";
+    lockLandscapeOrientation();
     showControls();
   }
 
@@ -982,6 +985,24 @@
     }, 600);
   }
 
+  if (btnStop) {
+    btnStop.addEventListener("click", () => {
+      video.pause();
+      seekTo(0);
+      showSnackbar("Đã dừng phát video");
+      showControls();
+    });
+  }
+
+  if (btnReplayFromStart) {
+    btnReplayFromStart.addEventListener("click", () => {
+      seekTo(0);
+      video.play();
+      showSnackbar("Đang phát lại từ đầu");
+      resetControlsTimer();
+    });
+  }
+
   btnRewind10.addEventListener("click", () => seekRelative(-10));
   btnForward10.addEventListener("click", () => seekRelative(10));
 
@@ -1038,7 +1059,11 @@
 
     // Nhận tap nếu không vuốt trượt dài (< 25px) và không giữ lâu (< 450ms)
     if (distX < 25 && distY < 25 && elapsed < 450) {
-      const isRightHalf = e.clientX >= window.innerWidth / 2;
+      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+      // Khi màn hình xoay ngang trong khung hình dọc, nửa trên là trái (-5s), nửa dưới là phải (+5s)
+      const isRightHalf = isPortrait
+        ? e.clientY >= window.innerHeight / 2
+        : e.clientX >= window.innerWidth / 2;
       handleGestureTap(isRightHalf);
     }
   });
@@ -1179,29 +1204,25 @@
   let currentVideoIsLandscape = true;
   let isForcedRotated = false;
 
-  async function forceOrientationForVideo(isLandscape) {
-    currentVideoIsLandscape = isLandscape;
+  async function lockLandscapeOrientation() {
+    currentVideoIsLandscape = true;
+    videoContainer.classList.add("video-landscape");
+    videoContainer.classList.remove("video-portrait");
 
-    if (isLandscape) {
-      videoContainer.classList.add("video-landscape");
-      videoContainer.classList.remove("video-portrait");
-    } else {
-      videoContainer.classList.add("video-portrait");
-      videoContainer.classList.remove("video-landscape");
-    }
-
-    // Thử Screen Orientation API (Hỗ trợ tốt trên Android Chrome, WebAPK, Fullscreen)
+    // Luôn khóa màn hình ở chế độ xoay ngang (Landscape)
     if (screen.orientation && typeof screen.orientation.lock === "function") {
       try {
-        const mode = isLandscape ? "landscape" : "portrait";
-        await screen.orientation.lock(mode);
-        showSnackbar(isLandscape ? "Tự xoay: Màn hình ngang" : "Tự xoay: Màn hình dọc", 2000);
+        await screen.orientation.lock("landscape");
         return true;
       } catch (err) {
         console.warn("Screen orientation lock:", err);
       }
     }
     return false;
+  }
+
+  async function forceOrientationForVideo(isLandscape) {
+    return lockLandscapeOrientation();
   }
 
   function unlockOrientation() {
