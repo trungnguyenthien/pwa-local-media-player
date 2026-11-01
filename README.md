@@ -28,7 +28,7 @@ Trình phát video cục bộ đa nền tảng dạng **Progressive Web App (PWA
 - **Lọc cử chỉ thông minh**: Tự động phân biệt giữa chạm đơn, chạm đúp và thao tác cuộn/vuốt màn hình.
 
 ### 3. Trang "Video đã xem" (Watch History & Instant Replay)
-- **Tự động chụp Thumbnail**: Trích xuất ảnh thu nhỏ video tự động qua HTML5 Canvas.
+- **Danh sách gọn nhẹ (Không thumbnail)**: Hiển thị trực quan tiêu đề video, thời lượng (đã xem / tổng thời lượng) và thời gian phát lần trước.
 - **Lưu tiến trình xem**: Ghi nhớ thời lượng, vị trí xem dở (`currentTime`), phần trăm đã xem và thời điểm xem gần nhất qua **IndexedDB**.
 - **Xem lại trực tiếp (Instant Replay)**:
   - Trên Chromium (Desktop & Android): Tích hợp **File System Access API** để lưu `FileSystemFileHandle`, cho phép mở lại trực tiếp file gốc từ máy chỉ với 1 click.

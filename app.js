@@ -590,55 +590,51 @@
 
       const progressPercent =
         item.duration > 0
-          ? Math.min(100, (item.lastPosition / item.duration) * 100)
+          ? Math.min(100, ((item.lastPosition || 0) / item.duration) * 100)
           : 0;
-      const isCompleted =
-        item.duration > 0 && item.lastPosition >= item.duration - 5;
 
-      let progressText = "Chưa phát";
-      if (isCompleted) {
-        progressText = "Đã xem hết";
-      } else if (item.lastPosition > 0 && item.duration > 0) {
-        progressText = `Đã xem ${formatTime(item.lastPosition)} / ${formatTime(item.duration)} (${Math.round(progressPercent)}%)`;
-      } else if (item.duration > 0) {
-        progressText = `Thời lượng ${formatTime(item.duration)}`;
-      }
+      const durationText =
+        item.duration > 0
+          ? `${formatTime(item.lastPosition || 0)} / ${formatTime(item.duration)}`
+          : `${formatTime(item.lastPosition || 0)}`;
+
+      const lastPlayedText = formatDate(item.lastPlayedAt);
 
       card.innerHTML = `
-        <div class="card-thumbnail-wrap">
-          ${
-            item.thumbnail
-              ? `<img class="card-thumbnail" src="${item.thumbnail}" alt="Ảnh thu nhỏ video" loading="lazy">`
-              : `<div class="card-placeholder">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <rect x="2" y="2" width="20" height="20" rx="4"/>
-                  <polygon points="10 8 16 12 10 16" fill="currentColor"/>
-                </svg>
-                <span style="font-size: 0.75rem;">Video</span>
-              </div>`
-          }
-          ${item.duration > 0 ? `<span class="card-duration-badge">${formatTime(item.duration)}</span>` : ""}
-          ${progressPercent > 0 ? `<div class="card-progress-bar" style="width: ${progressPercent}%;"></div>` : ""}
-          <div class="card-play-overlay">
-            <div class="play-circle">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="7,5 19,12 7,19"/>
+        <div class="card-info">
+          <div class="card-title-row">
+            <svg class="card-file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>
+            </svg>
+            <h2 class="card-title" title="${item.name}">${item.name}</h2>
+          </div>
+          <div class="card-meta-row">
+            <span class="card-duration">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
               </svg>
-            </div>
+              <span>Thời lượng: <strong>${durationText}</strong></span>
+            </span>
+            <span class="card-separator">•</span>
+            <span class="card-last-played">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <span>Phát lần trước: <strong>${lastPlayedText}</strong></span>
+            </span>
           </div>
+          ${
+            progressPercent > 0
+              ? `<div class="card-progress-track"><div class="card-progress-bar" style="width: ${progressPercent}%;"></div></div>`
+              : ""
+          }
         </div>
 
-        <div class="card-body">
-          <h2 class="card-title" title="${item.name}">${item.name}</h2>
-          <div class="card-meta">
-            <span>${formatBytes(item.size)}</span>
-            <span>•</span>
-            <span>${formatDate(item.lastPlayedAt)}</span>
-          </div>
-          <div class="card-progress-text">${progressText}</div>
-        </div>
-
-        <div class="card-footer">
+        <div class="card-actions">
           <button class="card-btn-replay" type="button" aria-label="Xem lại">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="6,4 20,12 6,20"/>

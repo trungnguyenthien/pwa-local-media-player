@@ -3,14 +3,14 @@
  * Complies with PWA Standards & Mobile Best Practices
  */
 
-const CACHE_NAME = 'pwa-video-player-v11';
+const CACHE_NAME = 'pwa-video-player-v12';
 
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=11',
-  './app.js?v=11',
-  './manifest.webmanifest?v=11',
+  './styles.css?v=12',
+  './app.js?v=12',
+  './manifest.webmanifest?v=12',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'

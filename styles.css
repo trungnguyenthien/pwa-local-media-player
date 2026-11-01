@@ -941,164 +941,136 @@ html, body {
   margin-bottom: 24px;
 }
 
+/* --------------------------------------------------------------------------
+   History List & Compact Items (No Thumbnail)
+   -------------------------------------------------------------------------- */
 .history-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .history-card {
   background: var(--surface);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  overflow: hidden;
+  border-radius: 14px;
+  padding: 14px 18px;
   display: flex;
-  flex-direction: column;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, border-color 0.2s;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s, border-color 0.15s, background-color 0.15s;
   cursor: pointer;
   position: relative;
+  overflow: hidden;
 }
 
 .history-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.6);
+  background: var(--surface-container);
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
 }
 
-.card-thumbnail-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background-color: #000000;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.history-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
-.card-thumbnail {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.history-card:hover .card-thumbnail {
-  transform: scale(1.05);
-}
-
-.card-placeholder {
+.card-info {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 8px;
-  color: var(--text-muted);
-}
-
-.card-duration-badge {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: rgba(10, 11, 16, 0.85);
-  color: #ffffff;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-.card-progress-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background-color: var(--primary);
-  z-index: 2;
-}
-
-.card-play-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.history-card:hover .card-play-overlay {
-  opacity: 1;
-}
-
-.play-circle {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.5);
-  transform: scale(0.85);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.history-card:hover .play-circle {
-  transform: scale(1);
-}
-
-.card-body {
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   flex: 1;
+  min-width: 0;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-file-icon {
+  flex-shrink: 0;
+  color: var(--primary);
+  opacity: 0.95;
 }
 
 .card-title {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
 }
 
-.card-meta {
+.card-meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
-.card-progress-text {
-  font-size: 0.8125rem;
-  color: #818cf8;
-  font-weight: 500;
+.card-duration,
+.card-last-played {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-variant-numeric: tabular-nums;
 }
 
-.card-footer {
-  padding: 8px 12px 10px;
+.card-duration strong {
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.card-last-played strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.card-separator {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.card-progress-track {
+  width: 100%;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.card-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #818cf8);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.card-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--border-color);
-  background-color: var(--surface-container);
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .card-btn-replay {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 8px 16px;
   background: var(--primary-container);
   color: #818cf8;
   border: 1px solid rgba(99, 102, 241, 0.3);
@@ -1106,16 +1078,18 @@ html, body {
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, transform 0.15s, border-color 0.15s;
 }
 
 .card-btn-replay:hover {
-  background: rgba(99, 102, 241, 0.28);
+  background: rgba(99, 102, 241, 0.32);
+  border-color: rgba(99, 102, 241, 0.6);
+  transform: scale(1.03);
 }
 
 .card-btn-delete {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -1130,6 +1104,20 @@ html, body {
 .card-btn-delete:hover {
   color: var(--danger);
   background-color: var(--danger-container);
+}
+
+@media (max-width: 600px) {
+  .history-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .card-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+  }
 }
 
 /* --------------------------------------------------------------------------
