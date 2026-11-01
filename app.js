@@ -47,6 +47,8 @@
   const gestureRight = document.getElementById("gestureRight");
   const seekRippleLeft = document.getElementById("seekRippleLeft");
   const seekRippleRight = document.getElementById("seekRippleRight");
+  const rippleTextLeft = document.getElementById("rippleTextLeft");
+  const rippleTextRight = document.getElementById("rippleTextRight");
 
   // Bottom controls
   const btnPlayPause = document.getElementById("btnPlayPause");
@@ -984,8 +986,10 @@
     }
 
     if (deltaSeconds < 0) {
+      if (rippleTextLeft) rippleTextLeft.textContent = `${deltaSeconds}s`;
       triggerRipple(seekRippleLeft);
     } else {
+      if (rippleTextRight) rippleTextRight.textContent = `+${deltaSeconds}s`;
       triggerRipple(seekRippleRight);
     }
   }
@@ -1028,8 +1032,8 @@
       clearTimeout(tapTimeout);
       tapTimeout = null;
       lastTapTime = 0; // reset
-      // Nửa bên trái: lùi lại 5s (-5s); Nửa bên phải: tới 5s (+5s)
-      seekRelative(isRightHalf ? 5 : -5);
+      // Nửa bên trái: lùi lại 3s (-3s); Nửa bên phải: tới 3s (+3s)
+      seekRelative(isRightHalf ? 3 : -3);
     } else {
       lastTapTime = now;
       clearTimeout(tapTimeout);
@@ -1522,11 +1526,11 @@
         break;
       case "ArrowLeft":
         e.preventDefault();
-        seekRelative(-5);
+        seekRelative(-3);
         break;
       case "ArrowRight":
         e.preventDefault();
-        seekRelative(5);
+        seekRelative(3);
         break;
       case "KeyJ":
         e.preventDefault();

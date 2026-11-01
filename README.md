@@ -23,8 +23,8 @@ Trình phát video cục bộ đa nền tảng dạng **Progressive Web App (PWA
 - **1 Touch = Play / Pause (Kèm cơ chế lùi 1s khi Replay)**:
   - Khi đang phát: Chạm 1 lần để tạm dừng.
   - Khi phát lại (Replay / Resume): Tự động **nhảy lùi 1 giây** trước khi phát lại, giúp bạn không bị lỡ ngữ cảnh hoặc lời thoại vừa ngắt quãng.
-- **Double Touch bên trái = Lùi lại 5 giây (-5s)**: Chạm đúp nhanh ở nửa bên trái màn hình để tua lùi 5s kèm hiệu ứng sóng ripple trực quan.
-- **Double Touch bên phải = Tiến tới 5 giây (+5s)**: Chạm đúp nhanh ở nửa bên phải màn hình để tua tới 5s.
+- **Double Touch bên trái = Lùi lại 3 giây (-3s)**: Chạm đúp nhanh ở nửa bên trái màn hình để tua lùi 3s kèm hiệu ứng sóng ripple trực quan.
+- **Double Touch bên phải = Tiến tới 3 giây (+3s)**: Chạm đúp nhanh ở nửa bên phải màn hình để tua tới 3s.
 - **Lọc cử chỉ thông minh**: Tự động phân biệt giữa chạm đơn, chạm đúp và thao tác cuộn/vuốt màn hình.
 
 ### 3. Trang "Video đã xem" (Watch History & Instant Replay)
