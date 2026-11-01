@@ -38,7 +38,7 @@ Trình phát video cục bộ đa nền tảng dạng **Progressive Web App (PWA
 
 ### 4. Đầy đủ bộ điều khiển chuyên nghiệp
 - **Seek bar mượt mà**: Hiển thị thanh đệm dữ liệu (buffered bar), thời lượng `mm:ss` / `h:mm:ss` chuẩn `tabular-nums` chống giật layout, tooltip xem trước thời gian khi rê chuột.
-- **Tự động ẩn controls**: Thanh điều khiển tự động ẩn sau 3 giây không tương tác khi video đang phát, chạm hoặc di chuột để hiện lại ngay.
+- **Chủ động ẩn/hiện controls**: Thanh điều khiển và thanh tiêu đề luôn hiển thị cố định (không tự động biến mất), có nút bật/tắt chuyên dụng ở cạnh trái khi bạn muốn xem trọn vẹn toàn màn hình không bị che khuất.
 - **Tốc độ phát**: Tuỳ chọn linh hoạt `0.5x`, `0.75x`, `1x`, `1.25x`, `1.5x`, `2x`.
 - **Âm lượng & Tắt tiếng**: Thanh trượt âm lượng và nút bật/tắt tiếng nhanh (tự động ẩn thanh trượt trên màn hình cảm ứng theo quy chuẩn hệ thống).
 - **Lặp lại (Loop)**: Bật/tắt chế độ lặp lại video đang phát.

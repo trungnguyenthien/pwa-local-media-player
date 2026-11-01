@@ -746,28 +746,19 @@
   function showControls() {
     videoContainer.classList.remove("controls-hidden");
     updateToggleBarsIcon(true);
-    resetControlsTimer();
+    clearTimeout(controlsTimeout);
   }
 
   function hideControls() {
-    if (
-      !video.paused &&
-      !video.ended &&
-      !isDraggingSeek &&
-      speedDropdown.classList.contains("hidden")
-    ) {
-      videoContainer.classList.add("controls-hidden");
-      updateToggleBarsIcon(false);
-    }
+    // Chỉ ẩn khi người dùng chủ động nhấn nút ẩn/hiện ở cạnh trái
+    videoContainer.classList.add("controls-hidden");
+    updateToggleBarsIcon(false);
+    clearTimeout(controlsTimeout);
   }
 
   function resetControlsTimer() {
     clearTimeout(controlsTimeout);
-    if (!video.paused && !video.ended) {
-      controlsTimeout = setTimeout(() => {
-        hideControls();
-      }, 3000); // 3 seconds timeout per Spec
-    }
+    // Không tự động ẩn media control và header theo yêu cầu người dùng
   }
 
   // --------------------------------------------------------------------------
@@ -793,16 +784,14 @@
 
   function togglePlay() {
     if (video.paused || video.ended) {
-      // Khi phát lại / resume sau khi pause hoặc ended: nhảy lùi 1s trước khi play
+      // Khi phát lại / resume sau khi pause hoặc ended: nhảy lùi 1s trước khi play (không hiện thông báo)
       if (video.ended) {
         const targetTime = Math.max(0, (video.duration || 0) - 1.0);
         seekTo(targetTime);
-        showSnackbar("Đã lùi 1s & phát lại");
       } else if (video.currentTime > 1.0) {
         // Tạm dừng ở vị trí > 1s: lùi lại 1s để kịp bắt ngữ cảnh
         const targetTime = Math.max(0, video.currentTime - 1.0);
         seekTo(targetTime);
-        showSnackbar("Đã lùi 1s & tiếp tục phát");
       }
       video.play().catch(() => {
         btnCenterPlay.classList.remove("hidden");
@@ -1111,7 +1100,6 @@
     const target = Math.max(0, (video.duration || 0) - 1.0);
     seekTo(target);
     video.play();
-    showSnackbar("Đã lùi 1s & phát lại");
   });
   btnPlayPause.addEventListener("click", togglePlay);
 
