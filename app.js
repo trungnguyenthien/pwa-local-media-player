@@ -37,6 +37,9 @@
   const btnConfirmClear = document.getElementById("btnConfirmClear");
 
   // Center overlay elements
+  const btnToggleBars = document.getElementById("btnToggleBars");
+  const iconShowBars = document.getElementById("iconShowBars");
+  const iconHideBars = document.getElementById("iconHideBars");
   const btnCenterPlay = document.getElementById("btnCenterPlay");
   const btnCenterReplay = document.getElementById("btnCenterReplay");
   const bufferSpinner = document.getElementById("bufferSpinner");
@@ -728,8 +731,21 @@
   // Controls Auto-Hide Behavior (Spec Section 6.2)
   // --------------------------------------------------------------------------
 
+  function updateToggleBarsIcon(areControlsVisible) {
+    if (iconShowBars && iconHideBars) {
+      if (areControlsVisible) {
+        iconShowBars.classList.add("hidden");
+        iconHideBars.classList.remove("hidden");
+      } else {
+        iconShowBars.classList.remove("hidden");
+        iconHideBars.classList.add("hidden");
+      }
+    }
+  }
+
   function showControls() {
     videoContainer.classList.remove("controls-hidden");
+    updateToggleBarsIcon(true);
     resetControlsTimer();
   }
 
@@ -741,6 +757,7 @@
       speedDropdown.classList.contains("hidden")
     ) {
       videoContainer.classList.add("controls-hidden");
+      updateToggleBarsIcon(false);
     }
   }
 
@@ -1070,6 +1087,22 @@
       handleGestureTap(isRightHalf);
     }
   });
+
+  if (btnToggleBars) {
+    btnToggleBars.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isCurrentlyHidden = videoContainer.classList.contains("controls-hidden");
+      if (isCurrentlyHidden) {
+        showControls();
+        showSnackbar("Đã hiện thanh điều khiển & tiêu đề", 1500);
+      } else {
+        clearTimeout(controlsTimeout);
+        videoContainer.classList.add("controls-hidden");
+        updateToggleBarsIcon(false);
+        showSnackbar("Đã ẩn thanh điều khiển & tiêu đề", 1500);
+      }
+    });
+  }
 
   btnCenterPlay.addEventListener("click", togglePlay);
   btnCenterReplay.addEventListener("click", () => {
