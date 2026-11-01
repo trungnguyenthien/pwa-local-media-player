@@ -1381,3 +1381,37 @@ html, body {
     transform: translateY(0);
   }
 }
+
+/* --------------------------------------------------------------------------
+   Screen Orientation & CSS Forced Rotation Fallback
+   -------------------------------------------------------------------------- */
+.btn-control.rotate-active {
+  color: var(--primary) !important;
+  background-color: var(--primary-container) !important;
+}
+
+@media (orientation: portrait) {
+  .video-container.force-rotated-landscape {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vh !important;
+    height: 100vw !important;
+    transform: rotate(90deg) translateY(-100vw) !important;
+    transform-origin: top left !important;
+    z-index: 9999 !important;
+  }
+}
+
+@media (orientation: landscape) {
+  .video-container.force-rotated-portrait {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vh !important;
+    height: 100vw !important;
+    transform: rotate(90deg) translateY(-100vw) !important;
+    transform-origin: top left !important;
+    z-index: 9999 !important;
+  }
+}
