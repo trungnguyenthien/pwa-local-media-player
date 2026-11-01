@@ -76,6 +76,7 @@
   const speedOptions = document.querySelectorAll(".speed-opt");
   const btnLoop = document.getElementById("btnLoop");
   const btnPip = document.getElementById("btnPip");
+  const btnRotate = document.getElementById("btnRotate");
   const btnFullscreen = document.getElementById("btnFullscreen");
   const iconEnterFs = document.getElementById("iconEnterFs");
   const iconExitFs = document.getElementById("iconExitFs");
@@ -410,6 +411,7 @@
     }
     releaseWakeLock();
     clearMediaSession();
+    unlockOrientation();
   }
 
   /**
@@ -768,8 +770,16 @@
 
   function togglePlay() {
     if (video.paused || video.ended) {
+      // Khi phát lại / resume sau khi pause hoặc ended: nhảy lùi 1s trước khi play
       if (video.ended) {
-        video.currentTime = 0;
+        const targetTime = Math.max(0, (video.duration || 0) - 1.0);
+        seekTo(targetTime);
+        showSnackbar("Đã lùi 1s & phát lại");
+      } else if (video.currentTime > 1.0) {
+        // Tạm dừng ở vị trí > 1s: lùi lại 1s để kịp bắt ngữ cảnh
+        const targetTime = Math.max(0, video.currentTime - 1.0);
+        seekTo(targetTime);
+        showSnackbar("Đã lùi 1s & tiếp tục phát");
       }
       video.play().catch(() => {
         btnCenterPlay.classList.remove("hidden");
@@ -819,7 +829,17 @@
     bufferSpinner.classList.add("hidden");
   });
 
+  function handleVideoDimensions() {
+    if (video.videoWidth && video.videoHeight) {
+      const isLandscape = video.videoWidth > video.videoHeight;
+      forceOrientationForVideo(isLandscape);
+    }
+  }
+
+  video.addEventListener("loadedmetadata", handleVideoDimensions);
+
   video.addEventListener("loadeddata", () => {
+    handleVideoDimensions();
     // Capture snapshot for history thumbnail
     if (currentFile) {
       setTimeout(() => {
@@ -967,36 +987,62 @@
 
   function handleGestureTap(isRightHalf) {
     const now = Date.now();
-    if (now - lastTapTime < 280) {
+    if (now - lastTapTime < 290) {
+      // Double tap detected: cancel single tap action
       clearTimeout(tapTimeout);
       tapTimeout = null;
-      seekRelative(isRightHalf ? 10 : -10);
+      lastTapTime = 0; // reset
+      // Nửa bên trái: lùi lại 5s (-5s); Nửa bên phải: tới 5s (+5s)
+      seekRelative(isRightHalf ? 5 : -5);
     } else {
+      lastTapTime = now;
+      clearTimeout(tapTimeout);
       tapTimeout = setTimeout(() => {
+        tapTimeout = null;
+        // 1 touch = play/pause (khi resume tự động lùi 1s)
         if (videoContainer.classList.contains("controls-hidden")) {
           showControls();
         } else {
           togglePlay();
         }
-      }, 290);
+      }, 300);
     }
-    lastTapTime = now;
   }
 
-  gestureLeft.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    handleGestureTap(false);
-  });
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
 
-  gestureRight.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    handleGestureTap(true);
-  });
+  function handlePointerDown(e) {
+    touchStartX = e.clientX;
+    touchStartY = e.clientY;
+    touchStartTime = Date.now();
+  }
+
+  function handlePointerUp(e, isRightHalf) {
+    const distX = Math.abs(e.clientX - touchStartX);
+    const distY = Math.abs(e.clientY - touchStartY);
+    const elapsed = Date.now() - touchStartTime;
+
+    // Chỉ nhận tap nếu con trỏ không di chuyển nhiều (< 20px) và không giữ quá lâu (< 450ms)
+    if (distX < 20 && distY < 20 && elapsed < 450) {
+      e.preventDefault();
+      handleGestureTap(isRightHalf);
+    }
+  }
+
+  gestureLeft.addEventListener("pointerdown", handlePointerDown);
+  gestureLeft.addEventListener("pointerup", (e) => handlePointerUp(e, false));
+
+  gestureRight.addEventListener("pointerdown", handlePointerDown);
+  gestureRight.addEventListener("pointerup", (e) => handlePointerUp(e, true));
 
   btnCenterPlay.addEventListener("click", togglePlay);
   btnCenterReplay.addEventListener("click", () => {
-    video.currentTime = 0;
+    const target = Math.max(0, (video.duration || 0) - 1.0);
+    seekTo(target);
     video.play();
+    showSnackbar("Đã lùi 1s & phát lại");
   });
   btnPlayPause.addEventListener("click", togglePlay);
 
@@ -1120,6 +1166,70 @@
     );
   }
 
+  // --------------------------------------------------------------------------
+  // Screen Orientation & Auto-Rotation (Ngang/Dọc)
+  // --------------------------------------------------------------------------
+
+  let currentVideoIsLandscape = true;
+  let isForcedRotated = false;
+
+  async function forceOrientationForVideo(isLandscape) {
+    currentVideoIsLandscape = isLandscape;
+
+    if (isLandscape) {
+      videoContainer.classList.add("video-landscape");
+      videoContainer.classList.remove("video-portrait");
+    } else {
+      videoContainer.classList.add("video-portrait");
+      videoContainer.classList.remove("video-landscape");
+    }
+
+    // Thử Screen Orientation API (Hỗ trợ tốt trên Android Chrome, WebAPK, Fullscreen)
+    if (screen.orientation && typeof screen.orientation.lock === "function") {
+      try {
+        const mode = isLandscape ? "landscape" : "portrait";
+        await screen.orientation.lock(mode);
+        showSnackbar(isLandscape ? "Tự xoay: Màn hình ngang" : "Tự xoay: Màn hình dọc", 2000);
+        return true;
+      } catch (err) {
+        console.warn("Screen orientation lock:", err);
+      }
+    }
+    return false;
+  }
+
+  function unlockOrientation() {
+    if (screen.orientation && typeof screen.orientation.unlock === "function") {
+      try {
+        screen.orientation.unlock();
+      } catch (e) {}
+    }
+    videoContainer.classList.remove("force-rotated-landscape", "force-rotated-portrait");
+    if (btnRotate) btnRotate.classList.remove("rotate-active");
+    isForcedRotated = false;
+  }
+
+  if (btnRotate) {
+    btnRotate.addEventListener("click", async () => {
+      // Đổi chiều xoay
+      const newLandscape = !currentVideoIsLandscape;
+      const locked = await forceOrientationForVideo(newLandscape);
+
+      // Nếu API native không hoạt động (như iOS Safari), dùng CSS fallback rotation
+      if (!locked) {
+        isForcedRotated = !isForcedRotated;
+        btnRotate.classList.toggle("rotate-active", isForcedRotated);
+        if (isForcedRotated) {
+          videoContainer.classList.toggle("force-rotated-landscape", newLandscape);
+          showSnackbar(newLandscape ? "Đã xoay ngang màn hình" : "Đã xoay dọc màn hình");
+        } else {
+          videoContainer.classList.remove("force-rotated-landscape", "force-rotated-portrait");
+          showSnackbar("Đã trở về góc xoay mặc định");
+        }
+      }
+    });
+  }
+
   async function toggleFullscreen() {
     try {
       if (!isFullscreen()) {
@@ -1130,12 +1240,17 @@
         } else if (video.webkitEnterFullscreen) {
           video.webkitEnterFullscreen();
         }
+        // Force orientation lock when entering fullscreen
+        if (video.videoWidth && video.videoHeight) {
+          forceOrientationForVideo(video.videoWidth > video.videoHeight);
+        }
       } else {
         if (document.exitFullscreen) {
           await document.exitFullscreen();
         } else if (document.webkitExitFullscreen) {
           await document.webkitExitFullscreen();
         }
+        unlockOrientation();
       }
     } catch (err) {
       showSnackbar("Không thể chuyển chế độ toàn màn hình");
