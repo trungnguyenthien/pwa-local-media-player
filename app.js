@@ -822,7 +822,10 @@
   video.addEventListener("pause", () => {
     updatePlayPauseIcons(false);
     releaseWakeLock();
-    showControls();
+    // Không tự động hiện lại controls khi tạm dừng để tôn trọng chế độ ẩn
+    if (!videoContainer.classList.contains("controls-hidden")) {
+      resetControlsTimer();
+    }
     updateMediaSessionPlaybackState("paused");
     if (currentFile) {
       updateHistoryPosition(currentFile, video.currentTime);
@@ -986,7 +989,10 @@
   function seekRelative(deltaSeconds) {
     if (isNaN(video.duration)) return;
     seekTo(video.currentTime + deltaSeconds);
-    showControls();
+    // Không tự ý hiện lại controls nếu đang ẩn
+    if (!videoContainer.classList.contains("controls-hidden")) {
+      resetControlsTimer();
+    }
 
     if (deltaSeconds < 0) {
       triggerRipple(seekRippleLeft);
@@ -1040,12 +1046,8 @@
       clearTimeout(tapTimeout);
       tapTimeout = setTimeout(() => {
         tapTimeout = null;
-        // 1 touch = play/pause (khi resume tự động lùi 1s)
-        if (videoContainer.classList.contains("controls-hidden")) {
-          showControls();
-        } else {
-          togglePlay();
-        }
+        // 1 touch = play/pause (khi resume tự động lùi 1s), không tự ý hiện lại controls nếu đang ẩn
+        togglePlay();
       }, 300);
     }
   }
@@ -1526,7 +1528,9 @@
       case "KeyK":
         e.preventDefault();
         togglePlay();
-        showControls();
+        if (!videoContainer.classList.contains("controls-hidden")) {
+          resetControlsTimer();
+        }
         break;
       case "ArrowLeft":
         e.preventDefault();
@@ -1584,7 +1588,13 @@
     }
   });
 
-  videoContainer.addEventListener("mousemove", () => showControls());
+  videoContainer.addEventListener("mousemove", (e) => {
+    // Không hiện controls từ synthetic mousemove do touch gây ra trên thiết bị di động
+    if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+    // Nếu controls đang ẩn, không tự động bung ra khi di chuyển chuột
+    if (videoContainer.classList.contains("controls-hidden")) return;
+    showControls();
+  });
 
   // --------------------------------------------------------------------------
   // File Picker & Drag-and-Drop
