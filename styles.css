@@ -269,10 +269,13 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   Screen 1: Empty State
+   Screen 1: Empty State (Space-efficient for Landscape & Mobile)
    -------------------------------------------------------------------------- */
 .empty-screen {
   background: radial-gradient(circle at 50% 30%, #161726 0%, #0a0b10 100%);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -280,27 +283,28 @@ html, body {
 .empty-content {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 20px;
-  max-width: 680px;
-  margin: 0 auto;
+  padding: 12px 20px;
+  max-width: 900px;
+  margin: auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .drop-zone {
   width: 100%;
-  padding: 40px 24px;
-  border-radius: 24px;
+  padding: 20px 28px;
+  border-radius: 20px;
   border: 2px dashed rgba(99, 102, 241, 0.35);
-  background-color: rgba(19, 20, 29, 0.6);
+  background-color: rgba(19, 20, 29, 0.65);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
+  justify-content: space-between;
+  gap: 24px;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .drop-zone:hover, .drop-zone:focus-visible {
@@ -312,76 +316,112 @@ html, body {
 .drop-zone.dragover {
   border-color: #818cf8;
   background-color: rgba(99, 102, 241, 0.16);
-  transform: scale(1.02);
+  transform: scale(1.01);
+}
+
+.drop-zone-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1.2;
+  text-align: left;
+  min-width: 0;
 }
 
 .hero-icon-wrapper {
-  width: 96px;
-  height: 96px;
-  border-radius: 28px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #818cf8;
-  margin-bottom: 24px;
+  flex-shrink: 0;
   border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
+.hero-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.hero-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .hero-title {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin: 0;
   color: #ffffff;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .hero-desc {
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
-  line-height: 1.6;
-  max-width: 480px;
-  margin-bottom: 28px;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 380px;
+}
+
+.drop-zone-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  flex-shrink: 0;
 }
 
 .picker-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 6px;
+}
+
+.picker-actions .btn-lg {
+  padding: 10px 22px;
+  font-size: 0.9375rem;
+  white-space: nowrap;
 }
 
 .desktop-hint {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .format-chips {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .chip {
-  padding: 4px 10px;
+  padding: 2px 8px;
   background-color: var(--surface-variant);
-  border-radius: 8px;
-  font-size: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
 }
 
 .empty-footer {
-  padding: 16px 20px calc(16px + var(--safe-bottom));
+  padding: 8px 16px max(8px, var(--safe-bottom));
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 0.8125rem;
+  gap: 6px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   text-align: center;
 }
@@ -1314,25 +1354,145 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   Responsive Mobile Adjustments
+   Responsive Mobile & Landscape Space-Saving Adjustments
    -------------------------------------------------------------------------- */
-@media (max-width: 600px) {
+@media (max-width: 680px) and (orientation: portrait) {
+  .drop-zone {
+    flex-direction: column;
+    text-align: center;
+    padding: 22px 16px;
+    gap: 14px;
+  }
+
+  .drop-zone-info {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .hero-icon-wrapper {
+    width: 58px;
+    height: 58px;
+  }
+
+  .hero-icon {
+    width: 32px;
+    height: 32px;
+  }
+
   .hero-title {
     font-size: 1.25rem;
+    white-space: normal;
   }
 
   .hero-desc {
-    font-size: 0.875rem;
+    max-width: 340px;
+    font-size: 0.825rem;
   }
 
   .desktop-hint {
     display: none;
   }
+}
 
-  .drop-zone {
-    padding: 32px 16px;
+/* Compact Landscape Mode (Ensures zero vertical content cutoff) */
+@media (max-height: 520px), (orientation: landscape) and (max-height: 580px) {
+  .app-header {
+    height: calc(44px + var(--safe-top));
+    padding-left: max(14px, var(--safe-left));
+    padding-right: max(14px, var(--safe-right));
   }
 
+  .brand-title {
+    font-size: 0.95rem;
+  }
+
+  .header-actions .btn-sm {
+    padding: 4px 10px;
+    font-size: 0.8125rem;
+  }
+
+  .empty-content {
+    padding: 6px 14px;
+    max-width: 860px;
+  }
+
+  .drop-zone {
+    flex-direction: row;
+    padding: 10px 18px;
+    gap: 16px;
+    border-radius: 16px;
+  }
+
+  .drop-zone-info {
+    gap: 12px;
+    flex: 1.2;
+    text-align: left;
+  }
+
+  .hero-icon-wrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .hero-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hero-title {
+    font-size: 1.05rem;
+  }
+
+  .hero-desc {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    max-width: 320px;
+  }
+
+  .drop-zone-action {
+    gap: 6px;
+  }
+
+  .picker-actions .btn-lg {
+    padding: 7px 18px;
+    font-size: 0.875rem;
+  }
+
+  .desktop-hint {
+    font-size: 0.7rem;
+  }
+
+  .format-chips {
+    gap: 4px;
+  }
+
+  .chip {
+    padding: 1px 6px;
+    font-size: 0.65rem;
+  }
+
+  .empty-footer {
+    display: none;
+  }
+
+  .history-content {
+    padding: 8px 14px calc(8px + var(--safe-bottom));
+  }
+
+  .history-grid {
+    gap: 8px;
+  }
+
+  .history-card {
+    padding: 8px 14px;
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 600px) {
   .btn-icon-labeled span {
     display: none;
   }
@@ -1351,10 +1511,6 @@ html, body {
 
   .controls-group {
     gap: 2px;
-  }
-
-  .history-grid {
-    grid-template-columns: 1fr;
   }
 
   .dialog-panel {
